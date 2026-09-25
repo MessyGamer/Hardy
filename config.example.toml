@@ -53,6 +53,7 @@ group = "239.2.3.1"
 port = 6969
 ttl = 1
 interface = ""             # local IP of the interface to send on, "" = default route
+listen = true              # also receive markers phones broadcast on the LAN (GOTO works without the server)
 
 [upstream]
 # Optional: also forward to a bigger TAK server (FreeTAKServer, TAK Server, ...).

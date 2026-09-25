@@ -258,6 +258,67 @@ class MulticastSender:
         self._sock.close()
 
 
+class _MulticastProtocol(asyncio.DatagramProtocol):
+    def __init__(self, listener: "MulticastListener") -> None:
+        self.listener = listener
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        self.listener.handle(data, addr)
+
+
+class MulticastListener:
+    """Receives CoT that ATAK/iTAK devices broadcast on the SA multicast group."""
+
+    def __init__(self, cfg: MulticastConfig, on_event: Callable[[CotEvent], None], ignore_uids: set[str]) -> None:
+        self.cfg = cfg
+        self.on_event = on_event
+        self.ignore_uids = ignore_uids
+        self._transport: asyncio.DatagramTransport | None = None
+        self._seen_peers: set[str] = set()
+        self._binary_peers: set[str] = set()
+
+    async def start(self) -> None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+        sock.bind(("", self.cfg.port))
+        iface = socket.inet_aton(self.cfg.interface) if self.cfg.interface else socket.inet_aton("0.0.0.0")
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(self.cfg.group) + iface)
+        sock.setblocking(False)
+        loop = asyncio.get_running_loop()
+        self._transport, _ = await loop.create_datagram_endpoint(lambda: _MulticastProtocol(self), sock=sock)
+        log.info("Listening for ATAK/iTAK broadcasts on %s:%d", self.cfg.group, self.cfg.port)
+
+    def handle(self, data: bytes, addr) -> None:
+        peer = addr[0] if addr else "?"
+        if data[:1] == b"\xbf":
+            # TAK Protocol v1 (protobuf) - not decoded yet; say so once per device.
+            if peer not in self._binary_peers:
+                self._binary_peers.add(peer)
+                log.info("Device %s broadcasts in TAK binary format, which this version can't read yet", peer)
+            return
+        start = data.find(b"<event")
+        if start < 0:
+            return
+        ev = parse_event(data[start:])
+        if ev is None or ev.uid in self.ignore_uids or ev.is_ping:
+            return
+        if peer not in self._seen_peers:
+            self._seen_peers.add(peer)
+            log.info("Hearing broadcasts from device %s (%s)", peer, ev.callsign or ev.uid)
+        if not ev.type.startswith("a-"):
+            log.info("Broadcast from %s: %s %r", peer, ev.type, ev.callsign)
+        self.on_event(ev)
+
+    def close(self) -> None:
+        if self._transport:
+            self._transport.close()
+
+
 class UpstreamClient:
     """Keeps a TCP/TLS connection to an external TAK server and forwards CoT both ways."""
 

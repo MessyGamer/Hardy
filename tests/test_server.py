@@ -133,3 +133,16 @@ def test_tls_attempt_on_plain_port_is_refused_quickly():
         await server.close()
 
     asyncio.run(scenario())
+
+
+def test_multicast_listener_filters_and_parses():
+    from atak_bridge.config import MulticastConfig
+    from atak_bridge.net import MulticastListener
+
+    got = []
+    listener = MulticastListener(MulticastConfig(), got.append, ignore_uids={"UAV"})
+    listener.handle(sa_event("UAV", "HARDY-1"), ("10.0.0.1", 6969))  # our own echo
+    listener.handle(b"\xbf\x01\xbf\x00", ("10.0.0.2", 6969))  # protobuf, unsupported
+    listener.handle(b"not cot", ("10.0.0.2", 6969))
+    listener.handle(sa_event("IPHONE-1", "HARDY"), ("10.0.0.3", 6969))
+    assert [e.uid for e in got] == ["IPHONE-1"]

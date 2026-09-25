@@ -13,7 +13,7 @@ from .commands import CommandHandler
 from .config import Config, load_config
 from .cot import CotEvent, build_home_event, build_uav_event
 from .mavlink_link import MavlinkLink
-from .net import ClientConnection, MulticastSender, TakServer, UpstreamClient
+from .net import ClientConnection, MulticastListener, MulticastSender, TakServer, UpstreamClient
 from .state import StateStore
 
 log = logging.getLogger("atak_bridge")
@@ -28,6 +28,7 @@ class Bridge:
         self.link = link
         self.server: TakServer | None = None
         self.multicast: MulticastSender | None = None
+        self.mesh: MulticastListener | None = None
         self.upstream: UpstreamClient | None = None
         self.commands = CommandHandler(
             cfg.commands, store, link.submit_reposition if link else (lambda cmd: False)
@@ -82,6 +83,14 @@ class Bridge:
             await self.server.start()
         if self.cfg.multicast.enabled:
             self.multicast = MulticastSender(self.cfg.multicast)
+            if self.cfg.multicast.listen:
+                own = {self.cfg.drone.uid, f"{self.cfg.drone.uid}-home"}
+                self.mesh = MulticastListener(self.cfg.multicast, self.on_upstream_event, own)
+                try:
+                    await self.mesh.start()
+                except OSError as exc:
+                    log.warning("Can't listen for multicast broadcasts: %s", exc)
+                    self.mesh = None
         if self.cfg.upstream.enabled:
             self.upstream = UpstreamClient(self.cfg.upstream, self.on_upstream_event)
             tasks.append(asyncio.create_task(self.upstream.run(), name="upstream"))
@@ -107,6 +116,8 @@ class Bridge:
             await self.server.close()
         if self.multicast:
             self.multicast.close()
+        if self.mesh:
+            self.mesh.close()
 
 
 def main(argv: list[str] | None = None) -> None:

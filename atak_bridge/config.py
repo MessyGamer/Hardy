@@ -73,6 +73,9 @@ class MulticastConfig:
     ttl: int = 1
     # IP address of the local interface to send on ("" = OS default).
     interface: str = ""
+    # Also listen on the group for markers/positions broadcast by ATAK/iTAK devices
+    # (lets GOTO markers work from phones that aren't connected to the TCP server).
+    listen: bool = True
 
 
 @dataclass
