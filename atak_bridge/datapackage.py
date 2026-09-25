@@ -66,8 +66,9 @@ code{{background:#eee;padding:.1rem .3rem;border-radius:.3rem}}</style></head>
 <p><a class="btn" href="/{filename}">Download connection package</a></p>
 <ol>
 <li>Tap the button above and download the file.</li>
-<li><b>iPhone (iTAK):</b> open the <b>Files</b> app, go to <b>Downloads</b>, tap the file, then use the
-<b>Share</b> button and choose <b>iTAK</b>. Or, in iTAK, use its import option and pick the file from Downloads.</li>
+<li><b>iPhone (iTAK):</b> open the <b>Files</b> app, go to <b>Downloads</b>, <b>press and hold</b> the file
+(tapping it would unzip it), choose <b>Share</b>, then <b>iTAK</b>. Or use iTAK's own import option and pick
+the file from Downloads.</li>
 <li><b>Android (ATAK):</b> in ATAK use <b>Import</b> &rarr; Local SD and pick the file from Downloads.</li>
 <li>The server <b>{escape(name)}</b> appears in the app's server list and connects.</li>
 </ol>
