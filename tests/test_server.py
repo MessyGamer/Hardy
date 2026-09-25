@@ -103,9 +103,13 @@ def test_browser_gets_connection_package():
         head, body = await fetch(server.port, "/hardy-tak-server.zip")
         assert "application/zip" in head
         zf = zipfile.ZipFile(io.BytesIO(body))
-        pref = zf.read("server.pref").decode()
+        pref = zf.read("config.pref").decode()
         assert f"127.0.0.1:{server.port}:tcp" in pref
         assert "MANIFEST/manifest.xml" in zf.namelist()
+
+        head, body = await fetch(server.port, "/hardy-tak-server-iphone.zip")
+        assert "application/zip" in head
+        assert zipfile.ZipFile(io.BytesIO(body)).namelist() == ["config.pref"]
         assert not server.clients
         await server.close()
 

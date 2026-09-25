@@ -142,9 +142,11 @@ class TakServer:
                 path = request.split(b" ", 2)[1].decode("latin-1") if b" " in request else "/"
                 # Advertise whichever of our addresses the phone actually reached.
                 host = writer.get_extra_info("sockname")[0]
-                filename = package_filename(self.cfg.name)
-                if path.lstrip("/") == filename:
-                    body = build_server_package(self.cfg.name, host, self.cfg.port)
+                path = path.lstrip("/")
+                packages = {package_filename(self.cfg.name, itak): itak for itak in (False, True)}
+                if path in packages:
+                    filename = path
+                    body = build_server_package(self.cfg.name, host, self.cfg.port, itak=packages[path])
                     ctype, status = "application/zip", "200 OK"
                     extra = f'Content-Disposition: attachment; filename="{filename}"\r\n'
                     log.info("Sent connection package (%s:%d) to %s", host, self.cfg.port, peer)

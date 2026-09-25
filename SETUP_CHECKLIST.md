@@ -80,7 +80,7 @@ This checks the phones and Pi work before you involve the real aircraft.
   - **Android (ATAK):** ☰ menu → Settings → Network Preferences → TAK Servers → Add
   - **iPhone (iTAK):** iTAK's own add-server screen asks for a login and won't work here.
     Instead, open **Safari** on the phone, go to `http://<Pi address>:8087`, tap
-    **Download connection package**, and open the file in iTAK (details are on that page).
+    the **iPhone (iTAK)** button, and open the file in iTAK (details are on that page).
     This works on Android too.
 
   Fill in:

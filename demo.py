@@ -79,9 +79,12 @@ def main() -> None:
     ip = lan_ip()
     # Backup route for phones: a ready-made connection package saved next to this script,
     # which can be emailed / AirDropped / iCloud-shared to the phone and opened in iTAK or ATAK.
-    package_path = ROOT / package_filename(cfg.tak_server.name)
+    package_path = ROOT / package_filename(cfg.tak_server.name, itak=True)
     try:
-        package_path.write_bytes(build_server_package(cfg.tak_server.name, ip, args.port))
+        for itak in (False, True):
+            (ROOT / package_filename(cfg.tak_server.name, itak)).write_bytes(
+                build_server_package(cfg.tak_server.name, ip, args.port, itak=itak)
+            )
     except OSError:
         package_path = None
     print(
@@ -91,9 +94,9 @@ def main() -> None:
 
   EASIEST (iPhone or Android): open this in the phone's web browser
       http://{ip}:{args.port}
-  and tap "Download connection package", then open it in iTAK/ATAK.
+  and tap the iPhone or Android button, then open the file in iTAK/ATAK.
 
-  Backup: the same file is saved here - email it to your phone
+  Backup: the files are also saved here (iPhone one shown) - email it to your phone
       {package_path or "(could not save)"}
 
   Or add it by hand in ATAK (Android):
