@@ -8,6 +8,9 @@ Type=simple
 User=atak
 Group=atak
 SupplementaryGroups=dialout
+# Certificates live in /var/lib/atak-bridge (kept across restarts and upgrades).
+StateDirectory=atak-bridge
+StateDirectoryMode=0700
 ExecStart=/opt/atak-bridge/venv/bin/atak-bridge --config /etc/atak-bridge/config.toml
 Restart=always
 RestartSec=2

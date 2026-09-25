@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import secrets
 import socket
 import subprocess
 import sys
@@ -22,10 +23,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-try:
-    import pymavlink  # noqa: F401
-except ImportError:
-    sys.exit("pymavlink is missing. Install it first with:  pip install pymavlink")
+missing = []
+for module, package in (("pymavlink", "pymavlink"), ("cryptography", "cryptography")):
+    try:
+        __import__(module)
+    except ImportError:
+        missing.append(package)
+if missing:
+    sys.exit(f"Missing pieces. Install them first with:  pip install {' '.join(missing)}")
 
 from atak_bridge.app import Bridge  # noqa: E402
 from atak_bridge.config import Config  # noqa: E402
@@ -50,7 +55,8 @@ def lan_ip() -> str:
 
 
 async def run(bridge: Bridge, args: argparse.Namespace) -> None:
-    probes = await start_probes(skip={args.port}) if args.probe else []
+    skip = {args.port, bridge.cfg.secure.ssl_port, bridge.cfg.secure.enrollment_port}
+    probes = await start_probes(skip=skip) if args.probe else []
     try:
         await bridge.run()
     finally:
@@ -76,6 +82,21 @@ def main() -> None:
     cfg.tak_server.port = args.port
     # Safe to enable here: the only thing it can steer is the pretend drone.
     cfg.commands.enabled = True
+
+    # Secure (certificate) connections, which iTAK requires. The demo keeps its certificates
+    # and a generated password in ./tak-certs so phones stay signed in between runs.
+    cert_dir = ROOT / "tak-certs"
+    cert_dir.mkdir(exist_ok=True)
+    login_file = cert_dir / "demo-login.txt"
+    if login_file.exists():
+        password = login_file.read_text().strip()
+    else:
+        alphabet = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alikes (0/o, 1/l/i)
+        password = "".join(secrets.choice(alphabet) for _ in range(8))
+        login_file.write_text(password + "\n")
+    cfg.secure.enabled = True
+    cfg.secure.cert_dir = str(cert_dir)
+    cfg.secure.users = {"hardy": password}
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
 
@@ -104,6 +125,8 @@ def main() -> None:
         f"""
 ==================================================================
   DEMO RUNNING - pretend drone circling {args.lat:.5f}, {args.lon:.5f}
+
+  iTAK / ATAK LOGIN:   username  hardy      password  {password}
 
   EASIEST (iPhone or Android): open this in the phone's web browser
       http://{ip}:{args.port}

@@ -114,6 +114,22 @@ Everything is in [`config.example.toml`](config.example.toml) with comments. Key
 | `upstream` | `host`, `port`, `tls` | Forward to another TAK server |
 | `commands` | `enabled`, limits | Fly-to from ATAK markers |
 
+## iPhones (iTAK) and secure connections
+
+iTAK always signs in before it connects: it asks the server for a certificate on port
+**8446** using a username and password, then connects securely on port **8089**. The bridge
+has this built in (`[secure]` in the config):
+
+* On first start, it creates its own certificate authority in `cert_dir`.
+* Add a login per person under `[secure.users]`. Secure mode stays off while any password is
+  still `change-me`.
+* Set up each phone by opening `http://<pi-ip>:8087` in its browser and downloading the
+  **iPhone (iTAK)** package. Import it in iTAK (*Network → Servers → + → Upload server
+  package*) and enter the username and password when asked.
+* Phones need to reach TCP **8087** (setup page), **8089** and **8446**.
+
+Android ATAK can use the same secure package, or the plain TCP connection on 8087.
+
 ## Safety: fly-to commands
 
 `[commands]` is **disabled by default**. Before you enable it:

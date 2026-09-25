@@ -46,6 +46,21 @@ certfile = ""
 keyfile = ""
 cafile = ""                # set to require client certificates
 
+[secure]
+# Certificate-based connections. REQUIRED FOR iPHONES: iTAK always signs in with a
+# username/password and a certificate before connecting. Phones get set up by opening
+# http://<pi-ip>:8087 in the browser and downloading the iPhone package.
+# Needs TCP ports 8089 and 8446 reachable from the phones.
+enabled = true
+cert_dir = "/var/lib/atak-bridge/certs"
+ssl_port = 8089
+enrollment_port = 8446
+
+[secure.users]
+# username = "password"   - one line per person. Secure mode stays OFF until you
+# replace 'change-me' with a real password.
+hardy = "change-me"
+
 [multicast]
 # ATAK "SA multicast" - devices on the same LAN see the aircraft with zero setup.
 enabled = true

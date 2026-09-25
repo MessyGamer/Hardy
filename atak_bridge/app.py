@@ -29,6 +29,7 @@ class Bridge:
         self.server: TakServer | None = None
         self.multicast: MulticastSender | None = None
         self.mesh: MulticastListener | None = None
+        self.enrollment = None
         self.upstream: UpstreamClient | None = None
         self.commands = CommandHandler(
             cfg.commands, store, link.submit_reposition if link else (lambda cmd: False)
@@ -76,11 +77,35 @@ class Bridge:
                 last_home = loop.time()
             await asyncio.sleep(period)
 
+    async def start_secure(self) -> None:
+        """Certificate authority + sign-in (enrollment) + SSL streaming, as iTAK requires."""
+        sec = self.cfg.secure
+        usable = {u: p for u, p in sec.users.items() if p and p != "change-me"}
+        if not usable:
+            log.error(
+                "Secure connections are enabled but no usable logins are set: add at least one "
+                "username = \"password\" under [secure.users] (not 'change-me'). Secure mode is OFF."
+            )
+            return
+        # Imported here so plain mode works without the 'cryptography' package installed.
+        from .certs import TRUSTSTORE_PASSWORD, CertAuthority
+        from .datapackage import SecureInfo
+        from .enrollment import EnrollmentServer
+
+        ca = CertAuthority(sec.cert_dir, self.cfg.tak_server.name)
+        ca.ensure()
+        info = SecureInfo(sec.ssl_port, ca.truststore_p12(), TRUSTSTORE_PASSWORD)
+        await self.server.start_secure(sec.ssl_port, ca.server_context(require_client_cert=True), info)
+        self.enrollment = EnrollmentServer(ca, usable, sec.enrollment_port, self.cfg.tak_server.bind)
+        await self.enrollment.start()
+
     async def run(self) -> None:
         tasks = [asyncio.create_task(self.publisher(), name="publisher")]
         if self.cfg.tak_server.enabled:
             self.server = TakServer(self.cfg.tak_server, self.on_client_event)
             await self.server.start()
+            if self.cfg.secure.enabled:
+                await self.start_secure()
         if self.cfg.multicast.enabled:
             self.multicast = MulticastSender(self.cfg.multicast)
             if self.cfg.multicast.listen:
@@ -114,6 +139,8 @@ class Bridge:
             task.cancel()
         if self.server:
             await self.server.close()
+        if self.enrollment:
+            await self.enrollment.close()
         if self.multicast:
             self.multicast.close()
         if self.mesh:

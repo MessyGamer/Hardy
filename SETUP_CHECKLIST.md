@@ -78,7 +78,9 @@ This checks the phones and Pi work before you involve the real aircraft.
 - [ ] Connect the phone to the **same Wi-Fi** as the Pi
 - [ ] Add the Pi as a server:
   - **Android (ATAK):** ☰ menu → Settings → Network Preferences → TAK Servers → Add
-  - **iPhone (iTAK):** iTAK's own add-server screen asks for a login and won't work here.
+  - **iPhone (iTAK):** first set a password: in `/etc/atak-bridge/config.toml`, under
+    `[secure.users]`, change `hardy = "change-me"` to your own password, then restart
+    (`sudo systemctl restart atak-bridge`). iTAK's own add-server screen won't work here.
     Instead, open **Safari** on the phone, go to `http://<Pi address>:8087`, tap
     the **iPhone (iTAK)** button, and open the file in iTAK (details are on that page).
     This works on Android too.

@@ -66,6 +66,21 @@ class TakServerConfig:
 
 
 @dataclass
+class SecureConfig:
+    """Certificate-based secure connections. Required for iTAK, which always signs in first."""
+
+    enabled: bool = False
+    # Where the built-in certificate authority keeps its files.
+    cert_dir: str = "/var/lib/atak-bridge/certs"
+    # Secure CoT streaming port (phones connect here with their issued certificate).
+    ssl_port: int = 8089
+    # Certificate sign-in (enrollment) port, HTTPS.
+    enrollment_port: int = 8446
+    # Logins allowed to sign in: username = password.
+    users: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class MulticastConfig:
     enabled: bool = True
     group: str = "239.2.3.1"
@@ -117,6 +132,7 @@ class Config:
     mavlink: MavlinkConfig = field(default_factory=MavlinkConfig)
     drone: DroneConfig = field(default_factory=DroneConfig)
     tak_server: TakServerConfig = field(default_factory=TakServerConfig)
+    secure: SecureConfig = field(default_factory=SecureConfig)
     multicast: MulticastConfig = field(default_factory=MulticastConfig)
     upstream: UpstreamConfig = field(default_factory=UpstreamConfig)
     commands: CommandConfig = field(default_factory=CommandConfig)

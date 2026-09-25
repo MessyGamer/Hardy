@@ -12,7 +12,14 @@ from typing import Callable
 
 from .config import MulticastConfig, TakServerConfig, UpstreamConfig
 from .cot import CotEvent, CotStreamParser, build_pong, parse_event
-from .datapackage import build_download_page, build_server_package, package_filename
+from .datapackage import (
+    SecureInfo,
+    build_download_page,
+    build_secure_package,
+    build_server_package,
+    package_filename,
+    secure_android_filename,
+)
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +86,9 @@ class TakServer:
         # uid -> (raw, stale) of the latest event seen, replayed to newly connected clients.
         self._cache: dict[str, tuple[bytes, datetime | None]] = {}
         self._server: asyncio.base_events.Server | None = None
+        self._secure_server: asyncio.base_events.Server | None = None
+        # Set when certificate-based connections are available (see start_secure).
+        self.secure: SecureInfo | None = None
 
     def _ssl_context(self) -> ssl.SSLContext | None:
         if not self.cfg.tls:
@@ -98,17 +108,24 @@ class TakServer:
             "TAK server listening on %s:%d (%s)", self.cfg.bind, self.cfg.port, "TLS" if self.cfg.tls else "TCP"
         )
 
+    async def start_secure(self, port: int, ctx: ssl.SSLContext, info: SecureInfo) -> None:
+        """Extra listener for certificate-authenticated (SSL) clients such as iTAK."""
+        self._secure_server = await asyncio.start_server(self._handle_client, self.cfg.bind, port, ssl=ctx)
+        self.secure = info
+        log.info("Secure TAK server (certificates required) listening on %s:%d", self.cfg.bind, port)
+
     @property
     def port(self) -> int:
         assert self._server is not None
         return self._server.sockets[0].getsockname()[1]
 
     async def close(self) -> None:
-        if self._server:
-            self._server.close()
-            for client in list(self.clients):
-                client.writer.close()
-            await self._server.wait_closed()
+        for client in list(self.clients):
+            client.writer.close()
+        for server in (self._server, self._secure_server):
+            if server:
+                server.close()
+                await server.wait_closed()
 
     def remember(self, ev: CotEvent) -> None:
         if ev.is_delete:
@@ -143,15 +160,29 @@ class TakServer:
                 # Advertise whichever of our addresses the phone actually reached.
                 host = writer.get_extra_info("sockname")[0]
                 path = path.lstrip("/")
-                packages = {package_filename(self.cfg.name, itak): itak for itak in (False, True)}
+                name = self.cfg.name
+                # filename -> builder; the iPhone package is the secure one when available,
+                # because iTAK always signs in with a certificate.
+                packages = {
+                    package_filename(name): lambda: build_server_package(name, host, self.cfg.port),
+                    package_filename(name, itak=True): (
+                        (lambda: build_secure_package(name, host, self.secure, itak=True))
+                        if self.secure
+                        else (lambda: build_server_package(name, host, self.cfg.port, itak=True))
+                    ),
+                }
+                if self.secure:
+                    packages[secure_android_filename(name)] = lambda: build_secure_package(
+                        name, host, self.secure, itak=False
+                    )
                 if path in packages:
                     filename = path
-                    body = build_server_package(self.cfg.name, host, self.cfg.port, itak=packages[path])
+                    body = packages[path]()
                     ctype, status = "application/zip", "200 OK"
                     extra = f'Content-Disposition: attachment; filename="{filename}"\r\n'
-                    log.info("Sent connection package (%s:%d) to %s", host, self.cfg.port, peer)
+                    log.info("Sent connection package %s (server %s) to %s", filename, host, peer)
                 else:
-                    body = build_download_page(self.cfg.name, host, self.cfg.port)
+                    body = build_download_page(name, host, self.cfg.port, self.secure)
                     ctype, status, extra = "text/html; charset=utf-8", "200 OK", ""
                     log.info("Browser from %s opened the connection page", peer)
             head = (
@@ -200,7 +231,12 @@ class TakServer:
         _enable_keepalive(writer)
         client = ClientConnection(writer, peer)
         self.clients.add(client)
-        log.info("ATAK client connected from %s (%d total)", peer, len(self.clients))
+        cert = writer.get_extra_info("peercert")
+        if cert:
+            cn = next((v for rdn in cert.get("subject", ()) for k, v in rdn if k == "commonName"), "?")
+            log.info("Secure client '%s' connected from %s (%d total)", cn, peer, len(self.clients))
+        else:
+            log.info("ATAK client connected from %s (%d total)", peer, len(self.clients))
         self._replay_cache(client)
         writer_task = asyncio.create_task(client.run_writer())
         parser = CotStreamParser()
