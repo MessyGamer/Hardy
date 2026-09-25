@@ -53,6 +53,11 @@ class TakServerConfig:
     # Relay CoT between connected ATAK clients (so the Pi acts as a small TAK server).
     relay: bool = True
     max_clients: int = 32
+    # Name the server shows up as in ATAK/iTAK.
+    name: str = "Hardy"
+    # Opening http://<this-ip>:<port> in a phone browser offers a one-tap connection package
+    # (needed for iTAK, whose manual setup screen insists on certificate enrollment).
+    connection_package: bool = True
     tls: bool = False
     certfile: str = ""
     keyfile: str = ""

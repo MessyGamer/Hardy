@@ -81,10 +81,13 @@ def main() -> None:
 ==================================================================
   DEMO RUNNING - pretend drone circling {args.lat:.5f}, {args.lon:.5f}
 
-  Android (ATAK):  Settings > Network Preferences > TAK Servers > Add
-  iPhone  (iTAK):  Settings > Network > TAK Server
-            Address:  {ip}
-            Port:     {args.port}      Protocol: TCP  (untick SSL/TLS)
+  EASIEST (iPhone or Android): open this in the phone's web browser
+      http://{ip}:{args.port}
+  and tap "Download connection package", then open it in iTAK/ATAK.
+
+  Or add it by hand in ATAK (Android):
+      Settings > Network Preferences > TAK Servers > Add
+      Address {ip}   Port {args.port}   TCP   (untick SSL/TLS)
 
   Look for "DEMO-DRONE" on the map. Drop a marker, rename it
   GOTO and the drone flies to it. Press Ctrl+C here to stop.

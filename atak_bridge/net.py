@@ -12,6 +12,7 @@ from typing import Callable
 
 from .config import MulticastConfig, TakServerConfig, UpstreamConfig
 from .cot import CotEvent, CotStreamParser, build_pong, parse_event
+from .datapackage import build_download_page, build_server_package, package_filename
 
 log = logging.getLogger(__name__)
 
@@ -132,6 +133,36 @@ class TakServer:
                 continue
             client.send(raw)
 
+    async def _serve_http(self, request: bytes, writer: asyncio.StreamWriter, peer: str) -> None:
+        """Tiny web page so a phone browser can download a ready-made connection package."""
+        try:
+            if not self.cfg.connection_package:
+                body, ctype, status, extra = b"Not found", "text/plain", "404 Not Found", ""
+            else:
+                path = request.split(b" ", 2)[1].decode("latin-1") if b" " in request else "/"
+                # Advertise whichever of our addresses the phone actually reached.
+                host = writer.get_extra_info("sockname")[0]
+                filename = package_filename(self.cfg.name)
+                if path.lstrip("/") == filename:
+                    body = build_server_package(self.cfg.name, host, self.cfg.port)
+                    ctype, status = "application/zip", "200 OK"
+                    extra = f'Content-Disposition: attachment; filename="{filename}"\r\n'
+                    log.info("Sent connection package (%s:%d) to %s", host, self.cfg.port, peer)
+                else:
+                    body = build_download_page(self.cfg.name, host, self.cfg.port)
+                    ctype, status, extra = "text/html; charset=utf-8", "200 OK", ""
+                    log.info("Browser from %s opened the connection page", peer)
+            head = (
+                f"HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {len(body)}\r\n"
+                f"{extra}Cache-Control: no-store\r\nConnection: close\r\n\r\n"
+            ).encode()
+            writer.write(head if request.startswith(b"HEAD ") else head + body)
+            await writer.drain()
+        except (ConnectionError, ssl.SSLError, IndexError):
+            pass
+        finally:
+            writer.close()
+
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         peername = writer.get_extra_info("peername")
         peer = f"{peername[0]}:{peername[1]}" if peername else "?"
@@ -139,6 +170,20 @@ class TakServer:
             log.warning("Rejecting %s: max_clients (%d) reached", peer, self.cfg.max_clients)
             writer.close()
             return
+        # TAK clients speak first (their own position report). If it's a web browser instead,
+        # serve the connection-package download page on the same port.
+        first = b""
+        try:
+            first = await asyncio.wait_for(reader.read(65536), timeout=1.0)
+        except asyncio.TimeoutError:
+            pass
+        except (ConnectionError, ssl.SSLError):
+            writer.close()
+            return
+        if first.startswith((b"GET ", b"HEAD ")):
+            await self._serve_http(first, writer, peer)
+            return
+
         _enable_keepalive(writer)
         client = ClientConnection(writer, peer)
         self.clients.add(client)
@@ -146,11 +191,13 @@ class TakServer:
         self._replay_cache(client)
         writer_task = asyncio.create_task(client.run_writer())
         parser = CotStreamParser()
+        data = first
         try:
             while True:
-                data = await reader.read(65536)
                 if not data:
-                    break
+                    data = await reader.read(65536)
+                    if not data:
+                        break
                 for raw in parser.feed(data):
                     ev = parse_event(raw)
                     if ev is None:
@@ -162,6 +209,7 @@ class TakServer:
                         client.callsign = ev.callsign
                         log.info("%s identified as %s", peer, ev.callsign)
                     self.on_event(ev, client)
+                data = b""
         except (ConnectionError, ssl.SSLError, ValueError, asyncio.IncompleteReadError) as exc:
             log.info("%r connection error: %s", client, exc)
         finally:

@@ -74,3 +74,39 @@ def test_relay_ping_and_replay():
         await bridge.server.close()
 
     asyncio.run(scenario())
+
+
+def test_browser_gets_connection_package():
+    import io
+    import zipfile
+
+    async def fetch(port, path):
+        r, w = await asyncio.open_connection("127.0.0.1", port)
+        w.write(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+        await w.drain()
+        data = await asyncio.wait_for(r.read(), 2)
+        w.close()
+        head, _, body = data.partition(b"\r\n\r\n")
+        return head.decode(), body
+
+    async def scenario():
+        cfg = Config()
+        cfg.tak_server.port = 0
+        cfg.tak_server.bind = "127.0.0.1"
+        server = TakServer(cfg.tak_server, lambda ev, c: None)
+        await server.start()
+        cfg.tak_server.port = server.port
+
+        head, body = await fetch(server.port, "/")
+        assert "200 OK" in head and b"hardy-tak-server.zip" in body
+
+        head, body = await fetch(server.port, "/hardy-tak-server.zip")
+        assert "application/zip" in head
+        zf = zipfile.ZipFile(io.BytesIO(body))
+        pref = zf.read("server.pref").decode()
+        assert f"127.0.0.1:{server.port}:tcp" in pref
+        assert "MANIFEST/manifest.xml" in zf.namelist()
+        assert not server.clients
+        await server.close()
+
+    asyncio.run(scenario())
