@@ -31,6 +31,7 @@ from atak_bridge.app import Bridge  # noqa: E402
 from atak_bridge.config import Config  # noqa: E402
 from atak_bridge.datapackage import build_server_package, package_filename  # noqa: E402
 from atak_bridge.mavlink_link import MavlinkLink  # noqa: E402
+from atak_bridge.probe import start_probes  # noqa: E402
 from atak_bridge.state import StateStore  # noqa: E402
 
 DEMO_PORT_MAVLINK = 14561
@@ -48,11 +49,23 @@ def lan_ip() -> str:
         s.close()
 
 
+async def run(bridge: Bridge, args: argparse.Namespace) -> None:
+    probes = await start_probes(skip={args.port}) if args.probe else []
+    try:
+        await bridge.run()
+    finally:
+        for server in probes:
+            server.close()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lat", type=float, default=35.0, help="latitude the pretend drone circles")
     ap.add_argument("--lon", type=float, default=-117.0, help="longitude the pretend drone circles")
     ap.add_argument("--port", type=int, default=8087, help="TAK server port for ATAK to connect to")
+    ap.add_argument(
+        "--probe", action="store_true", help="also log connection attempts on other common TAK ports (diagnostic)"
+    )
     args = ap.parse_args()
 
     cfg = Config()
@@ -113,7 +126,7 @@ def main() -> None:
     link = MavlinkLink(cfg.mavlink, store)
     link.start()
     try:
-        asyncio.run(Bridge(cfg, store, link).run())
+        asyncio.run(run(Bridge(cfg, store, link), args))
     except KeyboardInterrupt:
         pass
     finally:
