@@ -17,7 +17,8 @@ go anywhere near a field.
 - [ ] The drone's **ground telemetry radio**, the small radio with a USB plug that
       normally connects to a laptop
 - [ ] **Wi-Fi** that the Pi and all the phones can join (a travel router or a phone hotspot)
-- [ ] One or more **Android phones** for the map
+- [ ] One or more **phones** for the map: Android uses **ATAK-CIV** (Google Play Store),
+      iPhone uses **iTAK** (App Store). Both are free and both work.
 - [ ] Know which **autopilot** the drone runs. It must be **ArduPilot (ArduPlane)** or
       **PX4**. If it's DJI, stop here, because this won't work with DJI.
 
@@ -72,14 +73,19 @@ This checks the phones and Pi work before you involve the real aircraft.
   ```
   Tip: change `35.0` and `-117.0` to your own location (right-click your house in Google
   Maps to copy the numbers), so the pretend plane circles near you.
-- [ ] Leave that running. On the phone, install **ATAK-CIV** from the Google Play Store and
-      open it. Allow the permissions it asks for.
+- [ ] Leave that running. On the phone, install **ATAK-CIV** (Android, Google Play Store) or
+      **iTAK** (iPhone, App Store) and open it. Allow the permissions it asks for.
 - [ ] Connect the phone to the **same Wi-Fi** as the Pi
-- [ ] In ATAK, tap the **☰ menu → Settings → Network Preferences → TAK Servers → Add**:
+- [ ] Add the Pi as a server:
+  - **Android (ATAK):** ☰ menu → Settings → Network Preferences → TAK Servers → Add
+  - **iPhone (iTAK):** Settings → Network → TAK Server (add a server), and pick **TCP**
+    rather than SSL/certificate enrollment if it asks
+
+  Fill in:
   - Description: `Drone`
   - Address: the Pi address you wrote down
   - Port: `8087`, protocol: **TCP**
-  - **Untick** "Use default SSL/TLS certificates"
+  - **Untick** "Use default SSL/TLS certificates" (ATAK only)
   - Tap **OK**. A small dot in the corner of the map should turn **green**.
 - [ ] You should see an airplane icon called **HARDY-1** flying in circles 🎉
 - [ ] Tap the icon and check it shows speed, altitude and battery
@@ -104,7 +110,7 @@ This checks the phones and Pi work before you involve the real aircraft.
 - [ ] Use the arrow keys to find these lines and change them:
   - `connection = "udpin:0.0.0.0:14551"` → `connection = "/dev/ttyUSB0"` (use the name
     you wrote down)
-  - `baud = 57600`: leave as is unless your buddy set the radio to a different speed
+  - `baud = 57600`: leave as is unless the radio was set to a different speed
   - `callsign = "HARDY-1"`: the name shown on the map, change it if you like
 - [ ] Save and exit: press **Ctrl + O**, **Enter**, then **Ctrl + X**
 - [ ] Restart the software:
@@ -150,7 +156,7 @@ This checks the phones and Pi work before you involve the real aircraft.
 
 The settings file has a **`[commands]`** section with `enabled = false`. Turning it on lets
 people on the map send the plane somewhere by dropping a pin named `GOTO`. **Leave it off.**
-If your buddy wants it later, read the "Safety" section of `README.md` together first.
+If you want it later, read the "Safety" section of `README.md` first.
 
 ---
 

@@ -81,7 +81,8 @@ def main() -> None:
 ==================================================================
   DEMO RUNNING - pretend drone circling {args.lat:.5f}, {args.lon:.5f}
 
-  In ATAK:  Settings > Network Preferences > TAK Servers > Add
+  Android (ATAK):  Settings > Network Preferences > TAK Servers > Add
+  iPhone  (iTAK):  Settings > Network > TAK Server
             Address:  {ip}
             Port:     {args.port}      Protocol: TCP  (untick SSL/TLS)
 
