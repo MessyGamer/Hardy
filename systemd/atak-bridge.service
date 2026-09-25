@@ -1,0 +1,21 @@
+[Unit]
+Description=ATAK <-> MAVLink bridge for fixed-wing UAV
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=atak
+Group=atak
+SupplementaryGroups=dialout
+ExecStart=/opt/atak-bridge/venv/bin/atak-bridge --config /etc/atak-bridge/config.toml
+Restart=always
+RestartSec=2
+Nice=-5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

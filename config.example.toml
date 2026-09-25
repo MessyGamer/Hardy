@@ -1,0 +1,78 @@
+# atak-bridge configuration. Copy to /etc/atak-bridge/config.toml and edit.
+# Any key left out uses the default shown here.
+
+log_level = "INFO"
+
+[mavlink]
+# How the Pi talks to the aircraft:
+#   "udpin:0.0.0.0:14551"  - MAVLink forwarded by mavlink-router / MAVProxy (recommended,
+#                            lets Mission Planner / QGC share the same telemetry radio)
+#   "/dev/ttyUSB0"         - telemetry radio (SiK/RFD900) plugged straight into the Pi
+#   "tcp:127.0.0.1:5760"   - ArduPilot SITL for bench testing
+connection = "udpin:0.0.0.0:14551"
+baud = 57600
+# Our MAVLink system id. Keep this different from your main GCS (usually 255) so the
+# bridge's heartbeat never masks the autopilot's GCS-loss failsafe.
+source_system = 253
+source_component = 191
+target_system = 0          # 0 = first autopilot heard
+stream_rate_hz = 4
+link_timeout_s = 5.0
+send_heartbeat = true
+
+[drone]
+uid = "HARDY-UAV-1"
+callsign = "HARDY-1"
+cot_type = "a-f-A-M-F-Q"   # friendly fixed-wing UAV
+team = "Cyan"
+role = "Team Member"
+publish_rate_hz = 2.0
+stale_s = 10.0
+publish_home = true
+video_url = ""             # e.g. "rtsp://192.168.1.50:8554/live" - shows up in ATAK's video player
+geoid_offset_m = 0.0       # only used if the autopilot doesn't report ellipsoid altitude
+
+[tak_server]
+# Built-in TAK server that ATAK/WinTAK/iTAK clients connect to.
+enabled = true
+bind = "0.0.0.0"
+port = 8087
+relay = true               # share positions/markers between connected ATAK users
+max_clients = 32
+tls = false
+certfile = ""
+keyfile = ""
+cafile = ""                # set to require client certificates
+
+[multicast]
+# ATAK "SA multicast" - devices on the same LAN see the aircraft with zero setup.
+enabled = true
+group = "239.2.3.1"
+port = 6969
+ttl = 1
+interface = ""             # local IP of the interface to send on, "" = default route
+
+[upstream]
+# Optional: also forward to a bigger TAK server (FreeTAKServer, TAK Server, ...).
+enabled = false
+host = ""
+port = 8087
+tls = false
+cafile = ""
+certfile = ""
+keyfile = ""
+
+[commands]
+# Fly-to from the ATAK map: drop a marker named "GOTO" (or "GOTO 100" for 100 m above
+# home) and the aircraft is sent a MAV_CMD_DO_REPOSITION (switches to GUIDED and loiters
+# at the point). OFF by default - read the README safety notes before enabling.
+enabled = false
+goto_prefix = "GOTO"
+default_alt_m = 120.0
+min_alt_m = 60.0
+max_alt_m = 120.0
+loiter_radius_m = 80.0
+max_distance_from_home_m = 3000.0
+allowed_senders = []       # e.g. ["PILOT", "MISSION-CMDR"]; empty = any connected client
+require_armed = true
+max_marker_age_s = 60.0
