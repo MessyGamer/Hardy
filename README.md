@@ -1,5 +1,7 @@
 # Hardy — ATAK bridge for a fixed-wing UAV
 
+> New to this? Start with the step-by-step [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md).
+
 `atak-bridge` runs on the ground control station (a Raspberry Pi 8 GB is plenty — it
 uses ~40 MB RAM and a few % of one core). It connects to the aircraft over MAVLink
 (ArduPlane or PX4) and puts the aircraft on every ATAK/WinTAK/iTAK map on your network.
