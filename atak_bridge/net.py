@@ -183,6 +183,17 @@ class TakServer:
         if first.startswith((b"GET ", b"HEAD ")):
             await self._serve_http(first, writer, peer)
             return
+        if first[:1] == b"\x16" and first[1:2] == b"\x03" and not self.cfg.tls:
+            # TLS ClientHello on our plain port: usually a phone browser auto-upgrading
+            # http:// to https://. Refuse with a TLS alert so it falls back to plain http.
+            log.info("%s tried a secure (TLS/HTTPS) connection; this port is plain TCP, refusing", peer)
+            try:
+                writer.write(b"\x15\x03\x01\x00\x02\x02\x28")  # alert: fatal handshake_failure
+                await writer.drain()
+            except (ConnectionError, OSError):
+                pass
+            writer.close()
+            return
 
         _enable_keepalive(writer)
         client = ClientConnection(writer, peer)

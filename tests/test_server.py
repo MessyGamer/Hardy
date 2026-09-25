@@ -110,3 +110,22 @@ def test_browser_gets_connection_package():
         await server.close()
 
     asyncio.run(scenario())
+
+
+def test_tls_attempt_on_plain_port_is_refused_quickly():
+    async def scenario():
+        cfg = Config()
+        cfg.tak_server.port = 0
+        cfg.tak_server.bind = "127.0.0.1"
+        server = TakServer(cfg.tak_server, lambda ev, c: None)
+        await server.start()
+        r, w = await asyncio.open_connection("127.0.0.1", server.port)
+        w.write(b"\x16\x03\x01\x00\x10" + b"\x00" * 16)  # looks like a TLS ClientHello
+        await w.drain()
+        data = await asyncio.wait_for(r.read(), 2)
+        assert data.startswith(b"\x15\x03")  # TLS alert, then closed
+        assert not server.clients
+        w.close()
+        await server.close()
+
+    asyncio.run(scenario())
