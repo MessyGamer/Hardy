@@ -48,6 +48,11 @@ class Bridge:
             self.upstream.send(raw)
 
     def on_client_event(self, ev: CotEvent, client: ClientConnection) -> None:
+        # Position reports ("a-...") arrive every few seconds; log everything else
+        # (markers, drawings, deletes) so it's easy to see what a phone actually sent.
+        if not ev.type.startswith("a-"):
+            what = "deleted an item" if ev.is_delete else f"sent '{ev.callsign or ev.uid}' ({ev.type})"
+            log.info("%s %s", client.callsign or client.peer, what)
         if self.cfg.tak_server.relay and self.server:
             self.server.remember(ev)
             self.server.broadcast(ev.raw, exclude=client)
