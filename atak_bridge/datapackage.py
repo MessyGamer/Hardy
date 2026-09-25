@@ -51,6 +51,7 @@ SECURE_PREF_TEMPLATE = """<?xml version='1.0' encoding='ASCII' standalone='yes'?
     <entry key="cacheCreds0" class="class java.lang.String">Cache credentials</entry>
   </preference>
   <preference version="1" name="com.atakmap.app_preferences">
+    <entry key="enrollForCertificateWithTrust0" class="class java.lang.Boolean">true</entry>
     <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
   </preference>
 </preferences>
@@ -87,14 +88,16 @@ def truststore_filename(name: str) -> str:
 def build_secure_package(name: str, host: str, secure: SecureInfo, itak: bool) -> bytes:
     """Package that makes the app trust our CA, ask for a login, enroll, then connect over SSL.
 
-    iTAK wants every file at the zip root and no manifest; ATAK wants a manifest.
+    Layout follows TAK Server's own packages: iTAK gets config.pref and the trust store at
+    the zip root with no manifest; ATAK gets a manifest. Both refer to the trust store as
+    cert/<file>, which is where the apps file it on import.
     """
     ts_name = truststore_filename(name)
     pref = SECURE_PREF_TEMPLATE.format(
         name=escape(name),
         host=escape(host),
         port=secure.ssl_port,
-        ca_location=ts_name if itak else f"cert/{ts_name}",
+        ca_location=f"cert/{ts_name}",
         ca_password=escape(secure.truststore_password),
     )
     buf = io.BytesIO()

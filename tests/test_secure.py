@@ -71,6 +71,7 @@ def test_itak_style_enrollment_and_secure_connection():
         pref = zf.read("config.pref").decode()
         assert f"127.0.0.1:{cfg.secure.ssl_port}:ssl" in pref
         assert "enrollForCertificateWithTrust0" in pref
+        assert "<entry key=\"caLocation0\" class=\"class java.lang.String\">cert/truststore-hardy.p12<" in pref
         ca_password = re.search(r'caPassword0" class="class java.lang.String">([^<]+)<', pref).group(1)
 
         # 2. Phone trusts the CA from the package's trust store.
