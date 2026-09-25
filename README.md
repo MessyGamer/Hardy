@@ -116,19 +116,21 @@ Everything is in [`config.example.toml`](config.example.toml) with comments. Key
 
 ## iPhones (iTAK) and secure connections
 
-iTAK always signs in before it connects: it asks the server for a certificate on port
-**8446** using a username and password, then connects securely on port **8089**. The bridge
-has this built in (`[secure]` in the config):
+iTAK only connects over certificate-secured connections, so the bridge has a built-in
+certificate authority and a secure listener (`[secure]` in the config):
 
-* On first start, it creates its own certificate authority in `cert_dir`.
+* On first start, it creates its certificate authority in `cert_dir`.
 * Add a login per person under `[secure.users]`. Secure mode stays off while any password is
   still `change-me`.
-* Set up each phone by opening `http://<pi-ip>:8087` in its browser and downloading the
-  **iPhone (iTAK)** package. Import it in iTAK (*Network → Servers → + → Upload server
-  package*) and enter the username and password when asked.
-* Phones need to reach TCP **8087** (setup page), **8089** and **8446**.
-
-Android ATAK can use the same secure package, or the plain TCP connection on 8087.
+* **iPhone setup:** open `http://<pi-ip>:8087` in Safari and tap **iPhone (iTAK)**. Safari
+  asks for the username and password, then downloads a package holding that person's own
+  client certificate and the server's trust store, in the same layout OpenTAKServer uses.
+  Import it in iTAK (*Network → Servers → + → Upload server package*) and it connects on
+  **8089**. (iTAK's package import doesn't support the sign-in/enrollment style of package.)
+* **Android ATAK** can use the secure package, which signs in on port **8446**
+  (TAK-style certificate enrollment), or the plain TCP connection on 8087.
+* The download page is plain HTTP, so the login travels unencrypted on the local network.
+  Use it only on a network you trust.
 
 ## Safety: fly-to commands
 

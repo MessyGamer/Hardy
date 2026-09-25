@@ -63,15 +63,15 @@ def test_itak_style_enrollment_and_secure_connection():
         task = asyncio.create_task(bridge.run())
         await asyncio.sleep(1.5)  # key generation
 
-        # 1. Phone downloads the iPhone package from the plain port.
-        head, body = await http(cfg.tak_server.port, b"GET /hardy-tak-server-iphone.zip HTTP/1.1\r\n\r\n")
+        # 1. ATAK-style secure package (enrollment): trust store + sign-in settings.
+        head, body = await http(cfg.tak_server.port, b"GET /hardy-tak-server-android-secure.zip HTTP/1.1\r\n\r\n")
         assert "200 OK" in head
         zf = zipfile.ZipFile(io.BytesIO(body))
-        assert sorted(zf.namelist()) == ["config.pref", "truststore-hardy.p12"]  # all at the root
+        assert "MANIFEST/manifest.xml" in zf.namelist()
         pref = zf.read("config.pref").decode()
         assert f"127.0.0.1:{cfg.secure.ssl_port}:ssl" in pref
         assert "enrollForCertificateWithTrust0" in pref
-        assert "<entry key=\"caLocation0\" class=\"class java.lang.String\">cert/truststore-hardy.p12<" in pref
+        assert "cert/truststore-hardy.p12<" in pref
         ca_password = re.search(r'caPassword0" class="class java.lang.String">([^<]+)<', pref).group(1)
 
         # 2. Phone trusts the CA from the package's trust store.
@@ -143,6 +143,69 @@ def test_itak_style_enrollment_and_secure_connection():
             events += [parse_event(x) for x in parser.feed(await asyncio.wait_for(r.read(65536), 3))]
         w.close()
 
+        task.cancel()
+        await bridge.server.close()
+        await bridge.enrollment.close()
+
+    with tempfile.TemporaryDirectory() as d:
+        asyncio.run(scenario(Path(d)))
+
+
+def test_itak_package_has_ready_made_certificate_and_needs_login():
+    async def scenario(tmp: Path):
+        cfg = Config()
+        cfg.tak_server.bind = "127.0.0.1"
+        cfg.tak_server.port = free_port()
+        cfg.secure.enabled = True
+        cfg.secure.cert_dir = str(tmp / "certs")
+        cfg.secure.ssl_port = free_port()
+        cfg.secure.enrollment_port = free_port()
+        cfg.secure.users = {"hardy": "s3cret"}
+        cfg.multicast.enabled = False
+        bridge = Bridge(cfg, StateStore(), link=None)
+        task = asyncio.create_task(bridge.run())
+        await asyncio.sleep(1.5)
+
+        url = b"GET /hardy-tak-server-iphone.zip HTTP/1.1\r\n"
+        head, _ = await http(cfg.tak_server.port, url + b"\r\n")
+        assert "401" in head and "WWW-Authenticate: Basic" in head
+        head, _ = await http(
+            cfg.tak_server.port, url + f"Authorization: Basic {basic('hardy', 'wrong')}\r\n\r\n".encode()
+        )
+        assert "401" in head
+
+        head, body = await http(
+            cfg.tak_server.port, url + f"Authorization: Basic {basic('hardy', 's3cret')}\r\n\r\n".encode()
+        )
+        assert "200 OK" in head
+        zf = zipfile.ZipFile(io.BytesIO(body))
+        assert sorted(zf.namelist()) == ["config.pref", "hardy.p12", "truststore-root.p12"]
+        pref = zf.read("config.pref").decode()
+        assert f"127.0.0.1:{cfg.secure.ssl_port}:ssl" in pref
+        assert "cert/hardy.p12" in pref and "cert/truststore-root.p12" in pref
+        password = re.search(r'clientPassword" class="class java.lang.String">([^<]+)<', pref).group(1)
+
+        # Load it the way iTAK would and connect with the bundled certificate.
+        key, cert, _ = pkcs12.load_key_and_certificates(zf.read("hardy.p12"), password.encode())
+        _, _, cas = pkcs12.load_key_and_certificates(zf.read("truststore-root.p12"), password.encode())
+        assert cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value == "hardy"
+        ctx = ssl.create_default_context(cadata=cas[0].public_bytes(serialization.Encoding.PEM).decode())
+        ctx.check_hostname = False
+        (tmp / "c.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        (tmp / "c.key").write_bytes(
+            key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        )
+        ctx.load_cert_chain(tmp / "c.pem", tmp / "c.key")
+        r, w = await asyncio.open_connection("127.0.0.1", cfg.secure.ssl_port, ssl=ctx)
+        w.write(sa_event("IPHONE-2", "HARDY"))
+        await w.drain()
+        await asyncio.sleep(0.2)
+        bridge.publish_local("DRONE", sa_event("DRONE", "DEMO-DRONE"), 10)
+        parser = CotStreamParser()
+        events = []
+        while not any(e.uid == "DRONE" for e in events):
+            events += [parse_event(x) for x in parser.feed(await asyncio.wait_for(r.read(65536), 3))]
+        w.close()
         task.cancel()
         await bridge.server.close()
         await bridge.enrollment.close()

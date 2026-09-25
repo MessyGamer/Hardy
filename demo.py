@@ -34,7 +34,6 @@ if missing:
 
 from atak_bridge.app import Bridge  # noqa: E402
 from atak_bridge.config import Config  # noqa: E402
-from atak_bridge.datapackage import build_server_package, package_filename  # noqa: E402
 from atak_bridge.mavlink_link import MavlinkLink  # noqa: E402
 from atak_bridge.probe import start_probes  # noqa: E402
 from atak_bridge.state import StateStore  # noqa: E402
@@ -111,16 +110,6 @@ def main() -> None:
     )
 
     ip = lan_ip()
-    # Backup route for phones: a ready-made connection package saved next to this script,
-    # which can be emailed / AirDropped / iCloud-shared to the phone and opened in iTAK or ATAK.
-    package_path = ROOT / package_filename(cfg.tak_server.name, itak=True)
-    try:
-        for itak in (False, True):
-            (ROOT / package_filename(cfg.tak_server.name, itak)).write_bytes(
-                build_server_package(cfg.tak_server.name, ip, args.port, itak=itak)
-            )
-    except OSError:
-        package_path = None
     print(
         f"""
 ==================================================================
@@ -130,10 +119,8 @@ def main() -> None:
 
   EASIEST (iPhone or Android): open this in the phone's web browser
       http://{ip}:{args.port}
-  and tap the iPhone or Android button, then open the file in iTAK/ATAK.
-
-  Backup: the files are also saved here (iPhone one shown) - email it to your phone
-      {package_path or "(could not save)"}
+  and tap the iPhone or Android button (it asks for the login above),
+  then open the file in iTAK/ATAK.
 
   Or add it by hand in ATAK (Android):
       Settings > Network Preferences > TAK Servers > Add

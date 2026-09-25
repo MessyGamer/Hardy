@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hmac
 import logging
 import signal
 from datetime import datetime, timedelta, timezone
@@ -94,7 +95,14 @@ class Bridge:
 
         ca = CertAuthority(sec.cert_dir, self.cfg.tak_server.name)
         ca.ensure()
-        info = SecureInfo(sec.ssl_port, ca.truststore_p12(), TRUSTSTORE_PASSWORD)
+        def check_login(user: str, password: str) -> bool:
+            expected = usable.get(user)
+            return expected is not None and hmac.compare_digest(expected.encode(), password.encode())
+
+        info = SecureInfo(
+            sec.ssl_port, ca.truststore_p12(), TRUSTSTORE_PASSWORD,
+            issue_client_p12=ca.issue_client_p12, check_login=check_login,
+        )
         await self.server.start_secure(sec.ssl_port, ca.server_context(require_client_cert=True), info)
         self.enrollment = EnrollmentServer(ca, usable, sec.enrollment_port, self.cfg.tak_server.bind)
         await self.enrollment.start()

@@ -15,6 +15,7 @@ from .cot import CotEvent, CotStreamParser, build_pong, parse_event
 from .datapackage import (
     SecureInfo,
     build_download_page,
+    build_itak_package,
     build_secure_package,
     build_server_package,
     package_filename,
@@ -70,6 +71,21 @@ class ClientConnection:
         except (ConnectionError, ssl.SSLError) as exc:
             log.info("%r write failed: %s", self, exc)
             self.writer.close()
+
+
+def _basic_auth_user(request: bytes, check_login) -> str | None:
+    import base64
+
+    for line in request.split(b"\r\n")[1:]:
+        if line.lower().startswith(b"authorization:"):
+            value = line.split(b":", 1)[1].strip()
+            if value[:6].lower() == b"basic ":
+                try:
+                    user, _, password = base64.b64decode(value[6:]).decode("utf-8").partition(":")
+                except (ValueError, UnicodeDecodeError):
+                    return None
+                return user if check_login and check_login(user, password) else None
+    return None
 
 
 class TakServer:
@@ -163,14 +179,25 @@ class TakServer:
                 name = self.cfg.name
                 # filename -> builder; the iPhone package is the secure one when available,
                 # because iTAK always signs in with a certificate.
+                iphone = package_filename(name, itak=True)
                 packages = {
                     package_filename(name): lambda: build_server_package(name, host, self.cfg.port),
-                    package_filename(name, itak=True): (
-                        (lambda: build_secure_package(name, host, self.secure, itak=True))
-                        if self.secure
-                        else (lambda: build_server_package(name, host, self.cfg.port, itak=True))
-                    ),
+                    iphone: lambda: build_server_package(name, host, self.cfg.port, itak=True),
                 }
+                user = None
+                if self.secure and path == iphone:
+                    # The iPhone package contains a personal certificate, so it needs a login.
+                    user = _basic_auth_user(request, self.secure.check_login)
+                    if user is None:
+                        log.info("Asked %s to log in before downloading the iPhone package", peer)
+                        head = (
+                            "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n"
+                            f'WWW-Authenticate: Basic realm="{name} TAK server"\r\nConnection: close\r\n\r\n'
+                        ).encode()
+                        writer.write(head + b"Unauthorized")
+                        await writer.drain()
+                        return
+                    packages[iphone] = lambda: build_itak_package(name, host, self.secure, user)
                 if self.secure:
                     packages[secure_android_filename(name)] = lambda: build_secure_package(
                         name, host, self.secure, itak=False
@@ -180,7 +207,10 @@ class TakServer:
                     body = packages[path]()
                     ctype, status = "application/zip", "200 OK"
                     extra = f'Content-Disposition: attachment; filename="{filename}"\r\n'
-                    log.info("Sent connection package %s (server %s) to %s", filename, host, peer)
+                    log.info(
+                        "Sent connection package %s (server %s) to %s%s",
+                        filename, host, peer, f" for user '{user}'" if user else "",
+                    )
                 else:
                     body = build_download_page(name, host, self.cfg.port, self.secure)
                     ctype, status, extra = "text/html; charset=utf-8", "200 OK", ""

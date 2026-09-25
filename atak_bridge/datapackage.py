@@ -10,6 +10,7 @@ import io
 import uuid
 import zipfile
 from dataclasses import dataclass
+from typing import Callable
 from html import escape
 
 PREF_TEMPLATE = """<?xml version='1.0' encoding='ASCII' standalone='yes'?>
@@ -78,6 +79,9 @@ class SecureInfo:
     ssl_port: int
     truststore: bytes
     truststore_password: str
+    # For iTAK packages, which carry a ready-made client certificate instead of enrolling.
+    issue_client_p12: Callable[[str], bytes] | None = None
+    check_login: Callable[[str, str], bool] | None = None
 
 
 def truststore_filename(name: str) -> str:
@@ -116,6 +120,49 @@ def build_secure_package(name: str, host: str, secure: SecureInfo, itak: bool) -
     return buf.getvalue()
 
 
+ITAK_PREF_TEMPLATE = """<?xml version='1.0' standalone='yes'?>
+<preferences>
+  <preference version="1" name="cot_streams">
+    <entry key="count" class="class java.lang.Integer">1</entry>
+    <entry key="description0" class="class java.lang.String">{name}</entry>
+    <entry key="enabled0" class="class java.lang.Boolean">true</entry>
+    <entry key="connectString0" class="class java.lang.String">{host}:{port}:ssl</entry>
+  </preference>
+  <preference version="1" name="com.atakmap.app_preferences">
+    <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
+    <entry key="caLocation" class="class java.lang.String">cert/truststore-root.p12</entry>
+    <entry key="caPassword" class="class java.lang.String">{password}</entry>
+    <entry key="clientPassword" class="class java.lang.String">{password}</entry>
+    <entry key="certificateLocation" class="class java.lang.String">cert/{user_file}</entry>
+  </preference>
+</preferences>
+"""
+
+
+def safe_username(username: str) -> str:
+    return "".join(c for c in username if c.isalnum() or c in "-_.") or "user"
+
+
+def build_itak_package(name: str, host: str, secure: SecureInfo, username: str) -> bytes:
+    """iTAK package in the layout OpenTAKServer uses: a ready-made client certificate plus the
+    trust store, with config.pref, all at the zip root. iTAK connects straight away - no
+    enrollment step, which iTAK's package import does not support."""
+    user_file = f"{safe_username(username)}.p12"
+    pref = ITAK_PREF_TEMPLATE.format(
+        name=escape(name),
+        host=escape(host),
+        port=secure.ssl_port,
+        password=escape(secure.truststore_password),
+        user_file=escape(user_file),
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("config.pref", pref)
+        zf.writestr(user_file, secure.issue_client_p12(username))
+        zf.writestr("truststore-root.p12", secure.truststore)
+    return buf.getvalue()
+
+
 def package_filename(name: str, itak: bool = False) -> str:
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in name).strip("-") or "tak"
     return f"{safe.lower()}-tak-server{'-iphone' if itak else ''}.zip"
@@ -150,7 +197,8 @@ def build_download_page(name: str, host: str, port: int, secure: SecureInfo | No
 <li>Open the <b>Files</b> app &rarr; <b>Downloads</b>, <b>press and hold</b> the file (tapping it would unzip it),
 choose <b>Share</b>, then <b>iTAK</b>.</li>
 <li>In iTAK: <b>Network &rarr; Servers &rarr; + &rarr; Upload server package</b> and pick <code>{iphone}</code>.</li>
-<li>When iTAK asks, enter the <b>username and password</b> you were given.</li>"""
+<li>That's it - it connects straight away. (Safari asks for your <b>username and password</b> before downloading,
+because the file contains your personal certificate. Don't share it.)</li>"""
         android_buttons = (
             f'<a class="btn" href="/{secure_android_filename(name)}">Android (ATAK) secure package</a>'
             f'<a class="btn alt" href="/{android}">Android (ATAK) plain package, no login</a>'

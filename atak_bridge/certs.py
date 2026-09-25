@@ -194,6 +194,37 @@ class CertAuthority:
             .sign(self.ca_key, hashes.SHA256())
         )
 
+    def issue_client_p12(self, username: str, days: int = 365) -> bytes:
+        """A ready-made client identity (key + certificate + CA) for phones that can't enroll."""
+        key = _new_key()
+        now = dt.datetime.now(dt.timezone.utc)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(
+                x509.Name(
+                    [
+                        x509.NameAttribute(NameOID.COMMON_NAME, username),
+                        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "TAK"),
+                        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "TAK"),
+                    ]
+                )
+            )
+            .issuer_name(self.ca_cert.subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - dt.timedelta(minutes=5))
+            .not_valid_after(now + dt.timedelta(days=days))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(self.ca_key.public_key()), critical=False
+            )
+            .sign(self.ca_key, hashes.SHA256())
+        )
+        return pkcs12.serialize_key_and_certificates(
+            username.encode(), key, cert, [self.ca_cert], _legacy_p12_encryption(TRUSTSTORE_PASSWORD)
+        )
+
     def truststore_p12(self) -> bytes:
         return pkcs12.serialize_key_and_certificates(
             f"{self.name.lower()}-ca".encode(), None, None, [self.ca_cert],
