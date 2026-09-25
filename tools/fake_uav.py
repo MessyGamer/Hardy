@@ -4,7 +4,8 @@
     python tools/fake_uav.py --lat 35.0 --lon -117.0 --out udpout:127.0.0.1:14551
 
 Run atak-bridge with the default connection ("udpin:0.0.0.0:14551") and the aircraft
-appears in ATAK. DO_REPOSITION commands are acknowledged and the fake aircraft re-centres its orbit there.
+appears in ATAK. DO_REPOSITION commands are acknowledged and the fake aircraft
+flies there and circles it.
 """
 
 from __future__ import annotations
@@ -34,10 +35,18 @@ def main() -> None:
     mav = conn.mav
     ml = mavutil.mavlink
 
-    center_lat, center_lon = args.lat, args.lon
+    cos_lat = math.cos(math.radians(args.lat))
+
+    def to_latlon(x: float, y: float) -> tuple[float, float]:
+        """Local east/north metres from home -> lat/lon."""
+        return args.lat + y / M_PER_DEG, args.lon + x / (M_PER_DEG * cos_lat)
+
+    # Orbit centre, aircraft position (east/north metres from home) and altitudes.
+    cx, cy = 0.0, 0.0
+    x, y = args.radius, 0.0
     radius = args.radius
-    rel_alt = 100.0
-    angle = 0.0
+    rel_alt, target_alt = 100.0, 100.0
+    climb = 0.0
     custom_mode = 10  # ArduPlane AUTO
     battery = 100.0
     last_hb = 0.0
@@ -46,11 +55,25 @@ def main() -> None:
     print(f"Fake ArduPlane sending to {args.out}; Ctrl+C to stop")
     while True:
         now = time.monotonic()
-        omega = args.speed / radius
-        angle = (angle + omega * dt) % (2 * math.pi)
-        lat = center_lat + (radius * math.cos(angle)) / M_PER_DEG
-        lon = center_lon + (radius * math.sin(angle)) / (M_PER_DEG * math.cos(math.radians(center_lat)))
-        heading = (math.degrees(angle) + 90) % 360
+
+        # Fly straight at the orbit centre until near the circle, then orbit it anticlockwise.
+        dx, dy = x - cx, y - cy
+        d = math.hypot(dx, dy) or 1e-6
+        rx, ry = dx / d, dy / d
+        if d > radius * 1.5:
+            vx, vy = -rx, -ry
+        else:
+            correction = max(-1.0, min(1.0, (d - radius) / 50.0))
+            vx, vy = -ry - correction * rx, rx - correction * ry
+        norm = math.hypot(vx, vy)
+        vx, vy = vx / norm, vy / norm
+        x += vx * args.speed * dt
+        y += vy * args.speed * dt
+        heading = math.degrees(math.atan2(vx, vy)) % 360
+        lat, lon = to_latlon(x, y)
+
+        climb = max(-3.0, min(3.0, target_alt - rel_alt))
+        rel_alt += climb * dt
         battery = max(0.0, battery - 0.002)
 
         if now - last_hb >= 1.0:
@@ -76,7 +99,7 @@ def main() -> None:
             int(rel_alt * 1000),
             int(args.speed * math.cos(math.radians(heading)) * 100),
             int(args.speed * math.sin(math.radians(heading)) * 100),
-            0,
+            int(-climb * 100),
             int(heading * 100),
         )
         mav.gps_raw_int_send(
@@ -84,15 +107,17 @@ def main() -> None:
             80, 120, int(args.speed * 100), int(heading * 100), 14,
             int((args.alt + rel_alt - 33.0) * 1000), 1500, 2500, 300, 0, 0,
         )
-        mav.vfr_hud_send(args.speed + 0.5, args.speed, int(heading), 55, args.alt + rel_alt, 0.0)
+        mav.vfr_hud_send(args.speed + 0.5, args.speed, int(heading), 55, args.alt + rel_alt, climb)
 
         while (msg := conn.recv_match(blocking=False)) is not None:
             if msg.get_type() == "COMMAND_INT" and msg.command == ml.MAV_CMD_DO_REPOSITION:
-                center_lat, center_lon, rel_alt = msg.x / 1e7, msg.y / 1e7, msg.z
+                tlat, tlon, target_alt = msg.x / 1e7, msg.y / 1e7, msg.z
+                cx = (tlon - args.lon) * M_PER_DEG * cos_lat
+                cy = (tlat - args.lat) * M_PER_DEG
                 if msg.param3 >= 1:
                     radius = msg.param3
                 custom_mode = 15  # GUIDED
-                print(f"DO_REPOSITION -> {center_lat:.5f},{center_lon:.5f} @ {rel_alt:.0f} m")
+                print(f"DO_REPOSITION -> {tlat:.5f},{tlon:.5f} @ {target_alt:.0f} m")
                 mav.command_ack_send(ml.MAV_CMD_DO_REPOSITION, ml.MAV_RESULT_ACCEPTED)
 
         time.sleep(dt)

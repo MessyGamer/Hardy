@@ -133,6 +133,17 @@ Everything is in [`config.example.toml`](config.example.toml) with comments. Key
   authority. This is not a replacement for either.**
 * Check the altitude limits against your local airspace rules, and test in SITL first.
 
+## Quick demo on any computer (no drone needed)
+
+```bash
+pip install pymavlink
+python demo.py --lat <your latitude> --lon <your longitude>
+```
+
+This starts a pretend drone and the TAK server together, and prints the address to type
+into ATAK (port 8087, TCP). In the demo, fly-to is enabled, so a marker named `GOTO` makes
+the pretend drone fly there. Press Ctrl+C to stop.
+
 ## Testing without an aircraft
 
 ```bash
