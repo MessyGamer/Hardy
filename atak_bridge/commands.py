@@ -9,7 +9,7 @@ from typing import Callable
 
 from .config import CommandConfig
 from .cot import CotEvent
-from .mavlink_link import RepositionCommand
+from .mavlink_link import Command, RepositionCommand, ReturnHomeCommand
 from .state import StateStore
 
 log = logging.getLogger(__name__)
@@ -31,26 +31,54 @@ class CommandHandler:
         self,
         cfg: CommandConfig,
         store: StateStore,
-        submit: Callable[[RepositionCommand], bool],
+        submit: Callable[[Command], bool],
     ) -> None:
         self.cfg = cfg
         self.store = store
         self.submit = submit
         self._last: dict[str, tuple[float, float, float]] = {}
+        # uid of the GOTO marker the aircraft was last sent to (None = no active GOTO).
+        self.active_uid: str | None = None
 
     def is_command(self, ev: CotEvent) -> bool:
         prefix = self.cfg.goto_prefix.upper()
         return bool(prefix) and ev.callsign.upper().startswith(prefix) and not ev.is_delete
 
-    def handle(self, ev: CotEvent, now: datetime | None = None) -> str | None:
-        """Process an event. Returns a status string if it was a command, else None."""
-        if not self.cfg.enabled or not self.is_command(ev):
+    def handle(self, ev: CotEvent, now: datetime | None = None, sender: str = "") -> str | None:
+        """Process an event. Returns a status string if it was a command, else None.
+
+        `sender` is the callsign of the connection it arrived on, when known; it is used when
+        the event itself doesn't say who sent it (deletes don't).
+        """
+        if not self.cfg.enabled:
             return None
-        result = self._evaluate(ev, now or datetime.now(timezone.utc))
+        if ev.is_delete:
+            if not (self.cfg.delete_returns_home and self.active_uid and ev.link_uid == self.active_uid):
+                return None
+            result = self._return_home(ev, sender)
+            log.info("Active GOTO marker deleted (by %s): %s", sender or "?", result)
+            return result
+        if not self.is_command(ev):
+            return None
+        result = self._evaluate(ev, now or datetime.now(timezone.utc), sender)
         log.info("GOTO marker %r (uid %s, from %s): %s", ev.callsign, ev.uid, ev.sender_callsign or "?", result)
         return result
 
-    def _evaluate(self, ev: CotEvent, now: datetime) -> str:
+    def _return_home(self, ev: CotEvent, sender: str) -> str:
+        if self.cfg.allowed_senders and sender not in self.cfg.allowed_senders:
+            return f"rejected: sender {sender or '(unknown)'} not in allowed_senders"
+        state = self.store.snapshot()
+        if not state.connected:
+            return "rejected: no MAVLink link to vehicle"
+        if self.cfg.require_armed and not state.armed:
+            return "rejected: vehicle is not armed"
+        if not self.submit(ReturnHomeCommand()):
+            return "rejected: command queue full"
+        self._last.pop(self.active_uid, None)
+        self.active_uid = None
+        return "sent: RETURN HOME (RTL)"
+
+    def _evaluate(self, ev: CotEvent, now: datetime, sender: str = "") -> str:
         suffix = ev.callsign[len(self.cfg.goto_prefix):].strip()
         if suffix:
             try:
@@ -71,8 +99,9 @@ class CommandHandler:
         if ev.stale is not None and ev.stale < now:
             return "ignored: marker is stale"
 
-        if self.cfg.allowed_senders and ev.sender_callsign not in self.cfg.allowed_senders:
-            return f"rejected: sender {ev.sender_callsign or '(unknown)'} not in allowed_senders"
+        who = ev.sender_callsign or sender
+        if self.cfg.allowed_senders and who not in self.cfg.allowed_senders:
+            return f"rejected: sender {who or '(unknown)'} not in allowed_senders"
 
         key = (round(ev.lat, 6), round(ev.lon, 6), alt)
         if self._last.get(ev.uid) == key:
@@ -99,4 +128,5 @@ class CommandHandler:
         if not self.submit(cmd):
             return "rejected: command queue full"
         self._last[ev.uid] = key
+        self.active_uid = ev.uid
         return f"sent: {cmd.description} ({dist:.0f} m from home)"

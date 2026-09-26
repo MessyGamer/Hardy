@@ -39,7 +39,7 @@ bind = "0.0.0.0"
 port = 8087
 relay = true               # share positions/markers between connected ATAK users
 max_clients = 32
-name = "Hardy"             # server name shown in ATAK/iTAK
+name = "TAK Server"        # server name shown in ATAK/iTAK and on the setup page
 connection_package = true  # open http://<pi-ip>:8087 on a phone to download a one-tap setup file
 tls = false
 certfile = ""
@@ -94,3 +94,4 @@ max_distance_from_home_m = 3000.0
 allowed_senders = []       # e.g. ["PILOT", "MISSION-CMDR"]; empty = any connected client
 require_armed = true
 max_marker_age_s = 60.0
+delete_returns_home = true # deleting the active GOTO marker sends the aircraft home (RTL)

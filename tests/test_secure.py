@@ -64,18 +64,18 @@ def test_itak_style_enrollment_and_secure_connection():
         await asyncio.sleep(1.5)  # key generation
 
         # 1. ATAK-style secure package (enrollment): trust store + sign-in settings.
-        head, body = await http(cfg.tak_server.port, b"GET /hardy-tak-server-android-secure.zip HTTP/1.1\r\n\r\n")
+        head, body = await http(cfg.tak_server.port, b"GET /tak-server-android-secure.zip HTTP/1.1\r\n\r\n")
         assert "200 OK" in head
         zf = zipfile.ZipFile(io.BytesIO(body))
         assert "MANIFEST/manifest.xml" in zf.namelist()
         pref = zf.read("config.pref").decode()
         assert f"127.0.0.1:{cfg.secure.ssl_port}:ssl" in pref
         assert "enrollForCertificateWithTrust0" in pref
-        assert "cert/truststore-hardy.p12<" in pref
+        assert "cert/truststore-tak-server.p12<" in pref
         ca_password = re.search(r'caPassword0" class="class java.lang.String">([^<]+)<', pref).group(1)
 
         # 2. Phone trusts the CA from the package's trust store.
-        _, _, cas = pkcs12.load_key_and_certificates(zf.read("truststore-hardy.p12"), ca_password.encode())
+        _, _, cas = pkcs12.load_key_and_certificates(zf.read("truststore-tak-server.p12"), ca_password.encode())
         ca_pem = cas[0].public_bytes(serialization.Encoding.PEM).decode()
         trust = ssl.create_default_context(cadata=ca_pem)
         trust.check_hostname = False  # phone connects by IP; chain is what matters here
@@ -166,7 +166,7 @@ def test_itak_package_has_ready_made_certificate_and_needs_login():
         task = asyncio.create_task(bridge.run())
         await asyncio.sleep(1.5)
 
-        url = b"GET /hardy-tak-server-iphone.zip HTTP/1.1\r\n"
+        url = b"GET /tak-server-iphone.zip HTTP/1.1\r\n"
         head, _ = await http(cfg.tak_server.port, url + b"\r\n")
         assert "401" in head and "WWW-Authenticate: Basic" in head
         head, _ = await http(

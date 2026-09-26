@@ -78,7 +78,7 @@ def _legacy_p12_encryption(password: str):
 
 
 class CertAuthority:
-    def __init__(self, directory: str | Path, name: str = "Hardy") -> None:
+    def __init__(self, directory: str | Path, name: str = "TAK Server") -> None:
         self.dir = Path(directory)
         self.name = name
         self.ca_key = None
@@ -108,7 +108,7 @@ class CertAuthority:
             self.ca_key = _new_key()
             subject = x509.Name(
                 [
-                    x509.NameAttribute(NameOID.COMMON_NAME, f"{self.name} TAK CA"),
+                    x509.NameAttribute(NameOID.COMMON_NAME, f"{self.name} CA"),
                     x509.NameAttribute(NameOID.ORGANIZATION_NAME, "TAK"),
                 ]
             )

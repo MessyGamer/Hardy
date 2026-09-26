@@ -105,3 +105,36 @@ def test_duplicate_suppressed_but_move_accepted(setup):
     assert "duplicate" in handler.handle(marker(), NOW)
     assert handler.handle(marker(lat=35.006), NOW).startswith("sent")
     assert len(sent) == 2
+
+
+def delete_of(uid):
+    return CotEvent(
+        uid="del-1", type="t-x-d-d", lat=0.0, lon=0.0, hae=0.0, callsign="", sender_callsign="",
+        time=NOW, stale=NOW + timedelta(seconds=20), link_uid=uid, raw=b"",
+    )
+
+
+def test_deleting_active_goto_returns_home(setup):
+    from atak_bridge.mavlink_link import ReturnHomeCommand
+
+    handler, _, _, sent = setup
+    handler.handle(marker(uid="pin-A"), NOW)
+    assert handler.handle(delete_of("some-other-pin"), NOW) is None  # unrelated delete
+    assert handler.handle(delete_of("pin-A"), NOW, sender="HARDY") == "sent: RETURN HOME (RTL)"
+    assert isinstance(sent[-1], ReturnHomeCommand)
+    assert handler.active_uid is None
+    assert handler.handle(delete_of("pin-A"), NOW) is None  # already handled
+    # The same pin can be used again afterwards.
+    assert handler.handle(marker(uid="pin-A"), NOW).startswith("sent")
+
+
+def test_delete_return_home_can_be_disabled_and_respects_senders(setup):
+    handler, cfg, _, sent = setup
+    handler.handle(marker(uid="pin-A"), NOW)
+    cfg.delete_returns_home = False
+    assert handler.handle(delete_of("pin-A"), NOW) is None
+    cfg.delete_returns_home = True
+    cfg.allowed_senders = ["PILOT"]
+    assert "allowed_senders" in handler.handle(delete_of("pin-A"), NOW, sender="RANDO")
+    assert handler.handle(delete_of("pin-A"), NOW, sender="PILOT") == "sent: RETURN HOME (RTL)"
+    assert len(sent) == 2

@@ -165,7 +165,7 @@ def build_itak_package(name: str, host: str, secure: SecureInfo, username: str) 
 
 def package_filename(name: str, itak: bool = False) -> str:
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in name).strip("-") or "tak"
-    return f"{safe.lower()}-tak-server{'-iphone' if itak else ''}.zip"
+    return f"{safe.lower()}{'-iphone' if itak else ''}.zip"
 
 
 def build_server_package(name: str, host: str, port: int, itak: bool = False) -> bytes:
@@ -212,13 +212,13 @@ choose <b>Share</b>, then <b>iTAK</b>.</li>
         android_buttons = f'<a class="btn" href="/{android}">Android (ATAK) connection package</a>'
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(name)} TAK server</title>
+<title>{escape(name)}</title>
 <style>body{{font-family:-apple-system,system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem;line-height:1.5}}
 a.btn{{display:block;text-align:center;background:#2563eb;color:#fff;padding:1rem;border-radius:.6rem;text-decoration:none;font-weight:600;margin:.6rem 0}}
 a.alt{{background:#64748b}}
 code{{background:#eee;padding:.1rem .3rem;border-radius:.3rem}}</style></head>
 <body>
-<h1>{escape(name)} TAK server</h1>
+<h1>{escape(name)}</h1>
 <p>{server_line}</p>
 <a class="btn" href="/{iphone}">iPhone (iTAK) connection package</a>
 {android_buttons}

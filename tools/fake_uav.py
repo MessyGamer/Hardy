@@ -112,6 +112,11 @@ def main() -> None:
         mav.vfr_hud_send(args.speed + 0.5, args.speed, int(heading), 55, args.alt + rel_alt, climb)
 
         while (msg := conn.recv_match(blocking=False)) is not None:
+            if msg.get_type() == "COMMAND_LONG" and msg.command == ml.MAV_CMD_NAV_RETURN_TO_LAUNCH:
+                cx, cy, target_alt, radius = 0.0, 0.0, 100.0, args.radius
+                custom_mode = 11  # ArduPlane RTL
+                print("RETURN_TO_LAUNCH -> flying home")
+                mav.command_ack_send(ml.MAV_CMD_NAV_RETURN_TO_LAUNCH, ml.MAV_RESULT_ACCEPTED)
             if msg.get_type() == "COMMAND_INT" and msg.command == ml.MAV_CMD_DO_REPOSITION:
                 tlat, tlon, target_alt = msg.x / 1e7, msg.y / 1e7, msg.z
                 cx = (tlon - args.lon) * M_PER_DEG * cos_lat

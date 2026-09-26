@@ -30,6 +30,14 @@ class RepositionCommand:
     description: str
 
 
+@dataclass
+class ReturnHomeCommand:
+    description: str = "RETURN HOME (RTL)"
+
+
+Command = RepositionCommand | ReturnHomeCommand
+
+
 class MavlinkLink(threading.Thread):
     HEARTBEAT_PERIOD_S = 1.0
     REQUEST_PERIOD_S = 10.0
@@ -39,17 +47,18 @@ class MavlinkLink(threading.Thread):
         self.cfg = cfg
         self.store = store
         self._stop_evt = threading.Event()
-        self._commands: queue.Queue[RepositionCommand] = queue.Queue(maxsize=16)
+        self._commands: queue.Queue[Command] = queue.Queue(maxsize=16)
         self._target_system = cfg.target_system
         self._target_component = 0
         self._mavutil = None
-        self._pending_command = ""
+        # (MAV_CMD id, description) of the last command sent, for reporting its ACK.
+        self._pending: tuple[int, str] | None = None
 
     # ----------------------------------------------------------------- public
     def stop(self) -> None:
         self._stop_evt.set()
 
-    def submit_reposition(self, cmd: RepositionCommand) -> bool:
+    def submit_command(self, cmd: Command) -> bool:
         try:
             self._commands.put_nowait(cmd)
             return True
@@ -146,6 +155,15 @@ class MavlinkLink(threading.Thread):
             if not self._target_component:
                 log.warning("No vehicle connected; dropping %s", cmd.description)
                 continue
+            if isinstance(cmd, ReturnHomeCommand):
+                log.info("Sending RETURN_TO_LAUNCH")
+                conn.mav.command_long_send(
+                    self._target_system, self._target_component,
+                    mav.MAV_CMD_NAV_RETURN_TO_LAUNCH, 0, 0, 0, 0, 0, 0, 0, 0,
+                )
+                self._pending = (mav.MAV_CMD_NAV_RETURN_TO_LAUNCH, cmd.description)
+                self.store.update(last_command=f"{cmd.description} (sent)")
+                continue
             log.info("Sending DO_REPOSITION: %s", cmd.description)
             conn.mav.command_int_send(
                 self._target_system,
@@ -162,7 +180,7 @@ class MavlinkLink(threading.Thread):
                 int(round(cmd.lon * 1e7)),
                 float(cmd.alt_rel_m),
             )
-            self._pending_command = cmd.description
+            self._pending = (mav.MAV_CMD_DO_REPOSITION, cmd.description)
             self.store.update(last_command=f"{cmd.description} (sent)")
 
     def _handle(self, msg) -> None:
@@ -257,6 +275,6 @@ class MavlinkLink(threading.Thread):
                 cmd.name if cmd else msg.command,
                 result.name if result else msg.result,
             )
-            if msg.command == mav.MAV_CMD_DO_REPOSITION and self._pending_command:
+            if self._pending and msg.command == self._pending[0]:
                 status = "accepted" if msg.result == mav.MAV_RESULT_ACCEPTED else "REJECTED"
-                self.store.update(last_command=f"{self._pending_command} ({status})")
+                self.store.update(last_command=f"{self._pending[1]} ({status})")

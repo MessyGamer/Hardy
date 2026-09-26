@@ -192,7 +192,7 @@ class TakServer:
                         log.info("Asked %s to log in before downloading the iPhone package", peer)
                         head = (
                             "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n"
-                            f'WWW-Authenticate: Basic realm="{name} TAK server"\r\nConnection: close\r\n\r\n'
+                            f'WWW-Authenticate: Basic realm="{name}"\r\nConnection: close\r\n\r\n'
                         ).encode()
                         writer.write(head + b"Unauthorized")
                         await writer.drain()

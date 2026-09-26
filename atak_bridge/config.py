@@ -54,7 +54,7 @@ class TakServerConfig:
     relay: bool = True
     max_clients: int = 32
     # Name the server shows up as in ATAK/iTAK.
-    name: str = "Hardy"
+    name: str = "TAK Server"
     # Opening http://<this-ip>:<port> in a phone browser offers a one-tap connection package
     # (needed for iTAK, whose manual setup screen insists on certificate enrollment).
     connection_package: bool = True
@@ -125,6 +125,8 @@ class CommandConfig:
     require_armed: bool = True
     # Ignore markers whose CoT timestamp is older than this (e.g. replayed by a TAK server).
     max_marker_age_s: float = 60.0
+    # Deleting the GOTO marker the aircraft is currently flying to sends it home (RTL).
+    delete_returns_home: bool = True
 
 
 @dataclass
