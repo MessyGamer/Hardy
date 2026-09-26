@@ -69,7 +69,7 @@ This checks the phones and Pi work before you involve the real aircraft.
 
 - [ ] On the Pi, start the pretend plane:
   ```
-  /opt/atak-bridge/venv/bin/python tools/fake_uav.py --lat 35.0 --lon -117.0
+  /opt/atak-bridge/venv/bin/python tools/fake_uav.py --lat 35.0 --lon -117.0 --out udpout:127.0.0.1:14551
   ```
   Tip: change `35.0` and `-117.0` to your own location (right-click your house in Google
   Maps to copy the numbers), so the pretend plane circles near you.
