@@ -18,6 +18,7 @@ import secrets
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -75,7 +76,9 @@ def main() -> None:
 
     cfg = Config()
     cfg.log_level = "INFO"
-    cfg.mavlink.connection = f"udpin:127.0.0.1:{DEMO_PORT_MAVLINK}"
+    # TCP rather than UDP: on Windows, pymavlink's UDP sender binds the destination port
+    # itself, so commands sent back to the pretend drone would loop back to the bridge.
+    cfg.mavlink.connection = f"tcp:127.0.0.1:{DEMO_PORT_MAVLINK}"
     cfg.drone.callsign = "DEMO-DRONE"
     cfg.drone.uid = "DEMO-DRONE-1"
     cfg.tak_server.port = args.port
@@ -105,10 +108,11 @@ def main() -> None:
             str(ROOT / "tools" / "fake_uav.py"),
             "--lat", str(args.lat),
             "--lon", str(args.lon),
-            "--out", f"udpout:127.0.0.1:{DEMO_PORT_MAVLINK}",
+            "--out", f"tcpin:127.0.0.1:{DEMO_PORT_MAVLINK}",
         ]
     )
 
+    time.sleep(1.5)  # let the pretend drone start listening before we connect to it
     ip = lan_ip()
     print(
         f"""

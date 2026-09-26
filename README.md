@@ -165,11 +165,13 @@ the pretend drone fly there. Press Ctrl+C to stop.
 ## Testing without an aircraft
 
 ```bash
-# Terminal 1: a fake ArduPlane circling a point
+# Terminal 1: a fake ArduPlane circling a point (listens on TCP 5760, like SITL)
 python tools/fake_uav.py --lat 35.0 --lon -117.0
-# Terminal 2
-atak-bridge --config config.example.toml
+# Terminal 2: with mavlink.connection = "tcp:127.0.0.1:5760" in your config
+atak-bridge --config my-test-config.toml
 ```
+
+(`python demo.py` does both of these in one go.)
 
 Or use real ArduPilot SITL:
 `sim_vehicle.py -v ArduPlane --out udp:<pi-ip>:14551`.

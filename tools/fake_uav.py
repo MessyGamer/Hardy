@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Bench-test helper: pretends to be an ArduPlane circling a point, speaking MAVLink over UDP.
 
-    python tools/fake_uav.py --lat 35.0 --lon -117.0 --out udpout:127.0.0.1:14551
+    python tools/fake_uav.py --lat 35.0 --lon -117.0
 
-Run atak-bridge with the default connection ("udpin:0.0.0.0:14551") and the aircraft
-appears in ATAK. DO_REPOSITION commands are acknowledged and the fake aircraft
+By default it listens like ArduPilot SITL on TCP 127.0.0.1:5760, so run atak-bridge with
+connection = "tcp:127.0.0.1:5760" and the aircraft appears in ATAK. (UDP also works on
+Linux, e.g. --out udpout:127.0.0.1:14551, but not on Windows, where pymavlink's UDP sender
+binds the destination port itself and replies never reach it.) DO_REPOSITION commands are acknowledged and the fake aircraft
 flies there and circles it.
 """
 
@@ -23,7 +25,7 @@ M_PER_DEG = 111_320.0
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="udpout:127.0.0.1:14551")
+    ap.add_argument("--out", default="tcpin:127.0.0.1:5760")
     ap.add_argument("--lat", type=float, default=35.0)
     ap.add_argument("--lon", type=float, default=-117.0)
     ap.add_argument("--alt", type=float, default=700.0, help="home altitude MSL (m)")
