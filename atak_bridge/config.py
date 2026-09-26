@@ -126,7 +126,11 @@ class CommandConfig:
     # Ignore markers whose CoT timestamp is older than this (e.g. replayed by a TAK server).
     max_marker_age_s: float = 60.0
     # Deleting the GOTO marker the aircraft is currently flying to sends it home (RTL).
+    # (ATAK sends deletes to the server; iTAK does not, so use a HOME marker there.)
     delete_returns_home: bool = True
+    # A marker with one of these names, or re-sending the aircraft's own HOME marker,
+    # sends the aircraft home (RTL).
+    home_names: list[str] = field(default_factory=lambda: ["HOME", "RTL"])
 
 
 @dataclass

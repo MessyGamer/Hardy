@@ -32,8 +32,13 @@ class CommandHandler:
         cfg: CommandConfig,
         store: StateStore,
         submit: Callable[[Command], bool],
+        home_marker_uid: str = "",
     ) -> None:
         self.cfg = cfg
+        # uid of the HOME marker we publish for the aircraft; re-sending it means "go home".
+        self.home_marker_uid = home_marker_uid
+        # uid -> CoT time of home requests already acted on (so one send = one RTL).
+        self._home_seen: dict[str, datetime | None] = {}
         self.store = store
         self.submit = submit
         self._last: dict[str, tuple[float, float, float]] = {}
@@ -44,27 +49,42 @@ class CommandHandler:
         prefix = self.cfg.goto_prefix.upper()
         return bool(prefix) and ev.callsign.upper().startswith(prefix) and not ev.is_delete
 
-    def handle(self, ev: CotEvent, now: datetime | None = None, sender: str = "") -> str | None:
+    def handle(
+        self, ev: CotEvent, now: datetime | None = None, sender: str = "", from_client: bool = False
+    ) -> str | None:
         """Process an event. Returns a status string if it was a command, else None.
 
         `sender` is the callsign of the connection it arrived on, when known; it is used when
-        the event itself doesn't say who sent it (deletes don't).
+        the event itself doesn't say who sent it (deletes don't). `from_client` is True for
+        events sent by a phone connected to our own server.
         """
         if not self.cfg.enabled:
             return None
+        now = now or datetime.now(timezone.utc)
         if ev.is_delete:
             if not (self.cfg.delete_returns_home and self.active_uid and ev.link_uid == self.active_uid):
                 return None
-            result = self._return_home(ev, sender)
+            result = self._return_home(ev, sender, now)
             log.info("Active GOTO marker deleted (by %s): %s", sender or "?", result)
+            return result
+        names = {n.strip().upper() for n in self.cfg.home_names}
+        is_our_home = from_client and self.home_marker_uid and ev.uid == self.home_marker_uid
+        if is_our_home or ev.callsign.strip().upper() in names:
+            if self._home_seen.get(ev.uid, "unset") == ev.time:
+                return None  # same send seen again (e.g. relayed twice)
+            self._home_seen[ev.uid] = ev.time
+            result = self._return_home(ev, ev.sender_callsign or sender, now)
+            log.info("HOME request %r (from %s): %s", ev.callsign or ev.uid, ev.sender_callsign or sender or "?", result)
             return result
         if not self.is_command(ev):
             return None
-        result = self._evaluate(ev, now or datetime.now(timezone.utc), sender)
+        result = self._evaluate(ev, now, sender)
         log.info("GOTO marker %r (uid %s, from %s): %s", ev.callsign, ev.uid, ev.sender_callsign or "?", result)
         return result
 
-    def _return_home(self, ev: CotEvent, sender: str) -> str:
+    def _return_home(self, ev: CotEvent, sender: str, now: datetime) -> str:
+        if not ev.is_delete and ev.time is not None and (now - ev.time).total_seconds() > self.cfg.max_marker_age_s:
+            return "ignored: request is too old"
         if self.cfg.allowed_senders and sender not in self.cfg.allowed_senders:
             return f"rejected: sender {sender or '(unknown)'} not in allowed_senders"
         state = self.store.snapshot()
@@ -74,7 +94,8 @@ class CommandHandler:
             return "rejected: vehicle is not armed"
         if not self.submit(ReturnHomeCommand()):
             return "rejected: command queue full"
-        self._last.pop(self.active_uid, None)
+        if self.active_uid:
+            self._last.pop(self.active_uid, None)
         self.active_uid = None
         return "sent: RETURN HOME (RTL)"
 

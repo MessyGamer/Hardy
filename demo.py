@@ -130,8 +130,10 @@ def main() -> None:
       Settings > Network Preferences > TAK Servers > Add
       Address {ip}   Port {args.port}   TCP   (untick SSL/TLS)
 
-  Look for "DEMO-DRONE" on the map. Drop a marker, rename it
-  GOTO and the drone flies to it. Press Ctrl+C here to stop.
+  Look for "DEMO-DRONE" on the map. Drop a marker, rename it GOTO
+  and Broadcast it: the drone flies there. To send it home, Broadcast
+  its "DEMO-DRONE HOME" marker (or a marker named HOME).
+  Press Ctrl+C here to stop.
 ==================================================================
 """
     )

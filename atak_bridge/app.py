@@ -33,7 +33,10 @@ class Bridge:
         self.enrollment = None
         self.upstream: UpstreamClient | None = None
         self.commands = CommandHandler(
-            cfg.commands, store, link.submit_command if link else (lambda cmd: False)
+            cfg.commands,
+            store,
+            link.submit_command if link else (lambda cmd: False),
+            home_marker_uid=f"{cfg.drone.uid}-home",
         )
 
     # ------------------------------------------------------------ routing
@@ -58,7 +61,7 @@ class Bridge:
             self.server.broadcast(ev.raw, exclude=client)
         if self.upstream:
             self.upstream.send(ev.raw)
-        self.commands.handle(ev, sender=client.callsign)
+        self.commands.handle(ev, sender=client.callsign, from_client=True)
 
     def on_upstream_event(self, ev: CotEvent) -> None:
         if self.server:

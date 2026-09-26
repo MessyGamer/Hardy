@@ -31,8 +31,10 @@ uses ~40 MB RAM and a few % of one core). It connects to the aircraft over MAVLi
 * **Upstream** — can also forward to a larger TAK server.
 * **Fly-to from the map (optional, off by default)** — drop a marker called `GOTO` or
   `GOTO 100` (metres above home) and the aircraft receives `MAV_CMD_DO_REPOSITION`, which
-  switches it to GUIDED and loiters at that point. Deleting that marker sends the aircraft
-  home (`MAV_CMD_NAV_RETURN_TO_LAUNCH`). See [Safety](#safety-fly-to-commands).
+  switches it to GUIDED and loiters at that point. To send it home
+  (`MAV_CMD_NAV_RETURN_TO_LAUNCH`), send the aircraft's HOME marker or a marker named
+  `HOME` / `RTL`; on ATAK, deleting the active GOTO marker also works (iTAK doesn't send
+  deletes). See [Safety](#safety-fly-to-commands).
 
 ## Hardware / OS
 

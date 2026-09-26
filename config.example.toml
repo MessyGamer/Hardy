@@ -94,4 +94,5 @@ max_distance_from_home_m = 3000.0
 allowed_senders = []       # e.g. ["PILOT", "MISSION-CMDR"]; empty = any connected client
 require_armed = true
 max_marker_age_s = 60.0
-delete_returns_home = true # deleting the active GOTO marker sends the aircraft home (RTL)
+delete_returns_home = true # deleting the active GOTO marker sends the aircraft home (RTL) - ATAK only
+home_names = ["HOME", "RTL"]  # send a marker with this name (or re-send the aircraft's HOME marker) to RTL

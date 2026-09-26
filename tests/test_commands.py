@@ -138,3 +138,24 @@ def test_delete_return_home_can_be_disabled_and_respects_senders(setup):
     assert "allowed_senders" in handler.handle(delete_of("pin-A"), NOW, sender="RANDO")
     assert handler.handle(delete_of("pin-A"), NOW, sender="PILOT") == "sent: RETURN HOME (RTL)"
     assert len(sent) == 2
+
+
+def test_home_named_marker_returns_home(setup):
+    from atak_bridge.mavlink_link import ReturnHomeCommand
+
+    handler, _, _, sent = setup
+    handler.handle(marker(uid="pin-A"), NOW)
+    assert handler.handle(marker("home", uid="pin-H"), NOW) == "sent: RETURN HOME (RTL)"
+    assert isinstance(sent[-1], ReturnHomeCommand)
+    assert handler.active_uid is None
+    assert handler.handle(marker("home", uid="pin-H"), NOW) is None  # same send relayed again
+    assert "too old" in handler.handle(marker("RTL", uid="pin-R", age_s=600), NOW)
+
+
+def test_resending_aircraft_home_marker_returns_home(setup):
+    handler, _, _, sent = setup
+    handler.home_marker_uid = "UAV-1-home"
+    ev = marker("DEMO-DRONE HOME", uid="UAV-1-home")
+    assert handler.handle(ev, NOW) is None  # only counts when a connected phone sent it
+    assert handler.handle(ev, NOW, sender="HARDY", from_client=True) == "sent: RETURN HOME (RTL)"
+    assert len(sent) == 1
